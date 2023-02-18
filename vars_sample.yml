@@ -1,0 +1,24 @@
+# VCenter/VMWare information
+default_username: "Administrator"
+default_password: "Ch@ng3Me!"
+vcenter_datastore: "datastore1" 
+vcenter_datacenter: "ha-datacenter" 
+vcenter_login: ""
+vcenter_password: "" 
+
+# Windows ISO
+windows_iso: "Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
+windows_iso_url: "http://software-download.microsoft.com/download/pr/Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
+
+# VM data
+vm_name: testevm
+vm_network: "VM Network"
+vm_password_new: "P@ssw0rd"
+vm_disk_gb: 40
+vm_memory_mb: 2048
+vm_num_cpus: 2
+
+vm_address: 172.16.108.204
+vm_netmask_cidr: 24
+vm_gateway: 172.16.108.2
+vm_dns_server: 172.16.108.2

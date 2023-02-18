@@ -1,0 +1,216 @@
+---
+- hosts: all
+  gather_facts: false
+  vars_files:
+    - vars.yml
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
+    esxi_login: &esxi_login
+      hostname: '{{ vcenter_address }}'
+      username: '{{ vcenter_login }}'
+      password: '{{ vcenter_password }}'   
+      datacenter: '{{ vcenter_datacenter }}'
+      validate_certs: no  
+
+  tasks:
+  #- include_tasks: 'tasks/base.yml'
+  #- include_tasks: 'tasks/floppy.yml'
+  
+  - name: Gather vSphere schema information
+    community.vmware.vmware_datacenter_info:
+      <<: *esxi_login
+      schema: vsphere
+      properties:
+      - configStatus
+      - overallStatus
+    delegate_to: localhost
+    register: datacenter_info
+
+  - name: Check VMWare datacenter status
+    fail: msg="Vmware datacenter is not Green"
+    when: "datacenter_info['datacenter_info'] is not defined or datacenter_info['datacenter_info'][0]['overallStatus'] is not defined or datacenter_info['datacenter_info'][0]['overallStatus'] != 'green'"
+
+  - name: Gather datastore information
+    community.vmware.vmware_datastore_info:
+      <<: *esxi_login
+      schema: vsphere
+      properties:
+      - name
+      - overallStatus
+    delegate_to: localhost
+    register: datastore_info
+
+  - name: Filter selected datastore
+    set_fact:
+      selected_datastore: "{{ datastore_info.datastores | json_query(jmesquery) | first }}"
+    vars:
+      jmesquery: "[? overallStatus==`green` && name==`{{ vcenter_datastore }}`].{Name: name, Status: overallStatus}"
+
+  - name: Check selected datastore status
+    fail: msg="Vmware datastore {{ vcenter_datastore }} not exists or is not green"
+    when: "selected_datastore is not defined or selected_datastore['Name'] is not defined"
+
+  - name: Create ISO directory at datastore {{ vcenter_datastore }}
+    community.vmware.vsphere_file:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      path: ISO
+      state: directory
+    delegate_to: localhost
+
+  - name: Copy server2016eval.flp file to {{ vcenter_datastore }}/ISO folder
+    community.vmware.vsphere_copy:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      src: server2016eval.flp
+      path: ISO/server2016eval.flp
+    delegate_to: localhost
+
+  - name: Check uploaded file
+    community.vmware.vsphere_file:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      path: ISO/server2016eval.flp
+      state: file
+    delegate_to: localhost
+  
+  - name: Set file path
+    set_fact:
+      file_path: 'ISO/{{ windows_iso }}'
+
+  - name: Check if windows ISO is already exists
+    community.vmware.vsphere_file:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      path: '{{ file_path }}'
+      state: file
+    delegate_to: localhost
+    ignore_errors: true
+    register: iso_info
+
+  - name: Check if ISO file is already exists
+    set_fact:
+      iso_exists: "{{ file_path in ([ iso_info ] | json_query(jmesquery) |\
+      map(attribute='Path') | list ) }}"
+    vars:
+      jmesquery: "[? path==`{{ file_path }}` && status==`200`].{Path: path, Status: status, Size: size}"
+
+  - name: Download ISO
+    ansible.builtin.get_url:
+      url: '{{ windows_iso_url }}'
+      dest: './{{ windows_iso }}'
+    delegate_to: localhost
+    when: not iso_exists
+
+  - name: Copy ISO file to {{ vcenter_datastore }}/ISO folder
+    community.vmware.vsphere_copy:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      src: '{{ windows_iso }}'
+      path: 'ISO/{{ windows_iso }}'
+    delegate_to: localhost
+    when: not iso_exists
+
+  - name: Check uploaded ISO file
+    community.vmware.vsphere_file:
+      <<: *esxi_login
+      datastore: '{{ vcenter_datastore }}'
+      path: '{{ file_path }}'
+      state: file
+    delegate_to: localhost
+
+  - name: Create a new Server 2016 VM
+    vmware_guest:
+      <<: *esxi_login
+      folder: /
+      name: '{{ vm_name }}'
+      state: present
+      guest_id: windows9Server64Guest
+      cdrom:
+        - controller_number: 0
+          unit_number: 0
+          state: present
+          type: iso
+          iso_path: '[{{ vcenter_datastore }}] {{ windows_iso }}'
+      disk:
+      - size_gb: '{{ vm_disk_gb }}'
+        type: thin
+        datastore: '{{ vcenter_datastore }}'
+      hardware:
+        memory_mb: '{{ vm_memory_mb }}'
+        num_cpus: '{{ vm_num_cpus }}'
+        scsi: lsilogicsas
+      networks:
+      - name: '{{ vm_network }}'
+        device_type: e1000
+      wait_for_ip_address: no
+    delegate_to: localhost
+    register: deploy_vm
+
+  #  - debug: msg="{{deploy_vm}}"
+
+  - name: Change virtual machine's boot order and related parameters
+    vmware_guest_boot_manager:
+      hostname: '{{ vcenter_address }}'
+      username: '{{ vcenter_login }}'
+      password: '{{ vcenter_password }}'  
+      validate_certs: no  
+      name: '{{ vm_name }}'
+      boot_delay: 1000
+      enter_bios_setup: False
+      boot_retry_enabled: True
+      boot_retry_delay: 20000
+      boot_firmware: bios
+      secure_boot_enabled: False
+      boot_order:
+        - cdrom
+        - disk
+        - ethernet
+        - floppy
+    delegate_to: localhost
+    register: vm_boot_order
+
+  - name: Attach Floppy to VM
+    vmware.vmware_rest.vcenter_vm_hardware_floppy:
+      vcenter_hostname: '{{ vcenter_address }}'
+      vcenter_username: '{{ vcenter_login }}'
+      vcenter_password: '{{ vcenter_password }}'  
+      vm: '{{ deploy_vm.instance.moid }}'
+      allow_guest_control: true
+      start_connected: true
+      backing:
+        image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
+        type: 'IMAGE_FILE'
+    delegate_to: localhost
+
+  - name: Power-On the virtual machine
+    vmware_guest_powerstate:
+      <<: *esxi_login
+      name: '{{ vm_name }}'
+      state: powered-on
+    delegate_to: localhost
+    register: powerstate
+
+  - name: Wait for VMware tools to become available 
+    vmware_guest_tools_wait:
+      <<: *esxi_login
+      name: '{{ vm_name }}'
+    delegate_to: localhost
+    retries: 3
+    delay: 15
+    register: result           
+    until: result is succeeded 
+
+  - name: Set password via vmware_vm_shell
+    local_action:
+      module: vmware_vm_shell
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ default_password }}'
+      vm_id: '{{ vm_name }}'
+      vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+      vm_shell_args: '-command "(net user Administrator {{ vm_password_new }})"'
+      wait_for_process: true
+    ignore_errors: yes
