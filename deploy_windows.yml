@@ -321,7 +321,7 @@
 
 
   - name: Running systeminfo (just to test WinRM connection)
-    win_command: systeminfo
+    win_command: cmd.exe /c systeminfo
     args:
       chdir: "c:/windows/temp"
     register: systeminfo
