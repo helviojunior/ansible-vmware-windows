@@ -1,5 +1,9 @@
 # How to build a Windows VM from scratch with Ansible
 
+* [x] Vmware ESXi
+* [x] vSphere
+* [x] vCenter
+
 ## Installing
 
 ```bash
