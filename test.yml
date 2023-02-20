@@ -18,14 +18,52 @@
   #- include_tasks: 'tasks/base.yml'
   
 
-  - name: Set password via vmware_vm_shell
-    local_action:
-      module: vmware_vm_shell
+  - name: Find the VM's IP Address via VMware tools
+    vmware_guest_info:
       <<: *esxi_login
-      vm_username: 'Administrator'
-      vm_password: '{{ default_password }}'
-      vm_id: '{{ vm_name }}'
-      vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
-      vm_shell_args: '-command "(net user Administrator {{ vm_password_new }})"'
-      wait_for_process: true
-    ignore_errors: yes
+      datacenter: ha-datacenter
+      name: '{{ vm_name }}'
+    delegate_to: localhost
+    register: vmfacts
+  
+  - name: Get IP
+    set_fact:
+      windows_ip: "{{ vmfacts['instance']['ipv4'] }}"
+
+  - debug: msg="IP Address - {{ windows_ip }}"   
+
+  - name: Add new VM Windows to Ansible Hosts
+    add_host:
+      name: '{{ windows_ip }}'
+      group: "new_windows"
+      ansible_connection: winrm
+      ansible_winrm_transport: ntlm
+      ansible_winrm_server_cert_validation: ignore
+      ansible_user: 'Administrator'
+      ansible_password: '{{ vm_password_new }}'
+
+- hosts: "new_windows"
+  gather_facts: true
+  tasks:
+
+  #- name: Base | Enable .NET Windows features
+  #  win_feature:
+  #    name: as-net-framework, web-asp-net45
+  #    state: present
+
+  #- name: Base | Install .NET framework
+  #  win_package:
+  #    path: "https://download.microsoft.com/download/E/4/1/E4173890-A24A-4936-9FC9-AF930FE3FA40/NDP461-KB3102436-x86-x64-AllOS-ENU.exe"
+  #    product_id: "{BD6F5371-DAC1-30F0-9DDE-CAC6791E28C3}"
+  #    state: present
+  #    arguments: /q /norestart
+
+
+  - name: Running systeminfo (just to test WinRM connection)
+    win_command: cmd.exe /c systeminfo
+    args:
+      chdir: "c:/windows/temp"
+    register: systeminfo
+
+  - debug: msg="{{ systeminfo['stdout_lines'] }}"   
+
