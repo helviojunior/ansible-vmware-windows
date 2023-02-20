@@ -17,7 +17,3 @@ python3 -m pip install git+https://github.com/helviojunior/pyvmomi
 ```bash
 ip="10.10.10.10"; ansible-playbook -i $ip, deploy_windows.yaml
 ```
-
-
-## Libs
-https://github.com/ansible-collections/vmware.vmware_rest
