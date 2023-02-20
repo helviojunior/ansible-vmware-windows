@@ -208,6 +208,32 @@
     register: result           
     until: result is succeeded 
 
+  - name: Detach CDROM
+    vmware_guest:
+      <<: *esxi_login
+      folder: /
+      name: '{{ vm_name }}'
+      state: present
+      cdrom:
+        - controller_number: 0
+          unit_number: 0
+          state: present
+          type: none
+          start_connected: false
+    delegate_to: localhost
+    register: deploy_vm
+
+  - name: Detach Floppy
+    helviojunior.vmware.vmware_guest_floppy:
+      <<: *esxi_login
+      proxy_host: 127.0.0.1
+      proxy_port: 8080
+      name: '{{ vm_name }}'
+      state: present
+      type: none
+    delegate_to: localhost
+    register: deploy_vm
+
   - name: Set password via vmware_vm_shell
     local_action:
       module: vmware_vm_shell
@@ -231,31 +257,6 @@
       vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
       wait_for_process: true
   
-  - name: Detach CDROM
-    vmware_guest:
-      <<: *esxi_login
-      folder: /
-      name: '{{ vm_name }}'
-      state: present
-      cdrom:
-        - controller_number: 0
-          unit_number: 0
-          state: absent
-          type: none
-          start_connected: false
-    delegate_to: localhost
-    register: deploy_vm
-
-  - name: Remove Floppy
-    helviojunior.vmware.vmware_guest_floppy:
-      <<: *esxi_login
-      proxy_host: 127.0.0.1
-      proxy_port: 8080
-      name: '{{ vm_name }}'
-      state: absent
-    delegate_to: localhost
-    register: deploy_vm
-
   - name: Reboot-Guest
     vmware_guest_powerstate:
       <<: *esxi_login 
