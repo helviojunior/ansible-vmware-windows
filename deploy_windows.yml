@@ -5,6 +5,7 @@
     - vars.yml
 
   vars:
+    
     ansible_python_interpreter: "/usr/bin/python3"
     vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
     esxi_login: &esxi_login
@@ -13,6 +14,7 @@
       password: '{{ vcenter_password }}'   
       datacenter: '{{ vcenter_datacenter }}'
       validate_certs: no  
+
 
   tasks:
   - include_tasks: 'tasks/base.yml'
@@ -179,8 +181,6 @@
   - name: Attach Floppy to VM
     helviojunior.vmware.vmware_guest_floppy:
       <<: *esxi_login
-      proxy_host: 127.0.0.1
-      proxy_port: 8080
       name: '{{ vm_name }}'
       #state: absent
       #type: none
@@ -226,8 +226,6 @@
   - name: Detach Floppy
     helviojunior.vmware.vmware_guest_floppy:
       <<: *esxi_login
-      proxy_host: 127.0.0.1
-      proxy_port: 8080
       name: '{{ vm_name }}'
       state: present
       type: none
@@ -291,4 +289,44 @@
     delegate_to: localhost
     register: vmfacts
   
-  - debug: msg="IP Address - {{ vmfacts['instance']['ipv4'] }}"   
+  - name: Get IP
+    set_fact:
+      windows_ip: "{{ vmfacts['instance']['ipv4'] }}"
+
+  - debug: msg="IP Address - {{ windows_ip }}"   
+
+  - name: Add new VM Windows to Ansible Hosts
+    add_host:
+      name: '{{ windows_ip }}'
+      group: "windows"
+      ansible_connection: winrm
+      ansible_winrm_transport: ntlm
+      ansible_winrm_server_cert_validation: ignore
+      ansible_user: 'Administrator'
+      ansible_password: '{{ vm_password_new }}'
+
+  #- name: Base | Enable .NET Windows features
+  #  win_feature:
+  #    name: as-net-framework, web-asp-net45
+  #    state: present
+  #  delegate_to: '{{ windows_ip }}'
+
+  #- name: Base | Install .NET framework
+  #  win_package:
+  #    path: "https://download.microsoft.com/download/E/4/1/E4173890-A24A-4936-9FC9-AF930FE3FA40/NDP461-KB3102436-x86-x64-AllOS-ENU.exe"
+  #    product_id: "{BD6F5371-DAC1-30F0-9DDE-CAC6791E28C3}"
+  #    state: present
+  #    arguments: /q /norestart
+  #  delegate_to: '{{ windows_ip }}'
+
+
+  - name: Running systeminfo (just to test WinRM connection)
+    win_command: systeminfo
+    args:
+      chdir: "c:/windows/temp"
+    register: systeminfo
+    delegate_to: '{{ windows_ip }}'
+
+  - debug: msg="systeminfo"   
+
+
