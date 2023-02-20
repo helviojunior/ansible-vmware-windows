@@ -1,7 +1,6 @@
 ---
 - name: Base | Installing custom python pyvmomi
   ansible.builtin.pip:
-    executable: pip3
     state: forcereinstall
     name:
       - git+https://github.com/helviojunior/pyvmomi

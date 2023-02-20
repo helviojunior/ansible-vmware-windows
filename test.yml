@@ -1,0 +1,33 @@
+---
+- hosts: all
+  gather_facts: false
+  vars_files:
+    - vars.yml
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
+    esxi_login: &esxi_login
+      hostname: '{{ vcenter_address }}'
+      username: '{{ vcenter_login }}'
+      password: '{{ vcenter_password }}'   
+      datacenter: '{{ vcenter_datacenter }}'
+      validate_certs: no  
+
+  tasks:
+  #- include_tasks: 'tasks/base.yml'
+  
+  - name: Attach Floppy to VM
+    helviojunior.vmware.vmware_guest_floppy:
+      <<: *esxi_login
+      proxy_host: 127.0.0.1
+      proxy_port: 8080
+      name: '{{ vm_name }}'
+      #state: absent
+      #type: none
+      type: flp
+      image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
+      start_connected: true
+    delegate_to: localhost
+    register: deploy_vm
+

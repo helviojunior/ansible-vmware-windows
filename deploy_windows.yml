@@ -15,8 +15,8 @@
       validate_certs: no  
 
   tasks:
-  #- include_tasks: 'tasks/base.yml'
-  #- include_tasks: 'tasks/floppy.yml'
+  - include_tasks: 'tasks/base.yml'
+  - include_tasks: 'tasks/floppy.yml'
   
   - name: Gather vSphere schema information
     community.vmware.vmware_datacenter_info:
@@ -173,17 +173,18 @@
     register: vm_boot_order
 
   - name: Attach Floppy to VM
-    vmware.vmware_rest.vcenter_vm_hardware_floppy:
-      vcenter_hostname: '{{ vcenter_address }}'
-      vcenter_username: '{{ vcenter_login }}'
-      vcenter_password: '{{ vcenter_password }}'  
-      vm: '{{ deploy_vm.instance.moid }}'
-      allow_guest_control: true
+    helviojunior.vmware.vmware_guest_floppy:
+      <<: *esxi_login
+      proxy_host: 127.0.0.1
+      proxy_port: 8080
+      name: '{{ vm_name }}'
+      #state: absent
+      #type: none
+      type: flp
+      image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
       start_connected: true
-      backing:
-        image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
-        type: 'IMAGE_FILE'
     delegate_to: localhost
+    register: deploy_vm
 
   - name: Power-On the virtual machine
     vmware_guest_powerstate:
