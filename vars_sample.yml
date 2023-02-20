@@ -11,7 +11,7 @@ windows_iso: "Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
 windows_iso_url: "http://software-download.microsoft.com/download/pr/Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
 
 # VM data
-vm_name: testevm
+vm_name: testvm
 vm_network: "VM Network"
 vm_password_new: "P@ssw0rd"
 vm_disk_gb: 40
