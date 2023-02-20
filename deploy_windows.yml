@@ -212,10 +212,82 @@
     local_action:
       module: vmware_vm_shell
       <<: *esxi_login
-      vm_username: Administrator
+      vm_username: 'Administrator'
       vm_password: '{{ default_password }}'
       vm_id: '{{ vm_name }}'
       vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
       vm_shell_args: '-command "(net user Administrator {{ vm_password_new }})"'
       wait_for_process: true
     ignore_errors: yes
+
+  - name: Rename Computer via vmware_vm_shell
+    local_action:
+      module: vmware_vm_shell
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ vm_password_new }}'
+      vm_id: '{{ vm_name }}'
+      vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+      vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
+      wait_for_process: true
+  
+  - name: Detach CDROM
+    vmware_guest:
+      <<: *esxi_login
+      folder: /
+      name: '{{ vm_name }}'
+      state: present
+      cdrom:
+        - controller_number: 0
+          unit_number: 0
+          state: absent
+          type: none
+          start_connected: false
+    delegate_to: localhost
+    register: deploy_vm
+
+  - name: Remove Floppy
+    helviojunior.vmware.vmware_guest_floppy:
+      <<: *esxi_login
+      proxy_host: 127.0.0.1
+      proxy_port: 8080
+      name: '{{ vm_name }}'
+      state: absent
+    delegate_to: localhost
+    register: deploy_vm
+
+  - name: Reboot-Guest
+    vmware_guest_powerstate:
+      <<: *esxi_login 
+      name: '{{ vm_name }}'
+      state: reboot-guest
+    delegate_to: localhost
+    register: deploy
+  
+  - name: Wait for 30 seconds
+    wait_for: timeout=30
+    delegate_to: localhost
+  
+  - name: Wait for VMware tools to become available by name
+    vmware_guest_tools_wait:
+      <<: *esxi_login
+      name: '{{ vm_name }}'
+    delegate_to: localhost
+    retries: 3
+    delay: 15
+    register: result           
+    until: result is succeeded 
+  
+  - name: Wait for 30 seconds for VMware Tools refresh
+    wait_for: timeout=30
+    delegate_to: localhost
+  
+  - name: Find the VM's IP Address via VMware tools
+    vmware_guest_info:
+      <<: *esxi_login
+      datacenter: ha-datacenter
+      name: '{{ vm_name }}'
+    delegate_to: localhost
+    register: vmfacts
+  
+  - debug: msg="IP Address - {{ vmfacts['instance']['ipv4'] }}"   

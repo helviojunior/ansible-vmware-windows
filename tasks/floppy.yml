@@ -9,6 +9,27 @@
   register: local_dir
   delegate_to: localhost
 
+- name: Floppy | Creating a script.txt file
+  copy:
+    dest: "unattend/script.txt"
+    content: |
+      Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1'))
+      Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u2/windows/x64/VMware-tools-11.2.5-17337674-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
+  delegate_to: localhost
+
+- name: Floppy | Creating a script.cmd file
+  copy:
+    dest: "unattend/script.cmd"
+    content: |
+      @echo off
+      a:
+      cd a:\
+      powershell -ExecutionPolicy ByPass -enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAcwBjAHIAaQBwAHQALgB0AHgAdAAKACQARgBpAGwAZQBEAGEAdABhACAAfAAgAEkAbgB2AG8AawBlAC0ARQB4AHAAcgBlAHMAcwBpAG8AbgA=
+      C:\Windows\temp\VMware-tools.exe /S /v"/qn REBOOT=R"
+  delegate_to: localhost
+
 - name: Floppy | Creating a autounattend.xml file
   copy:
     dest: "unattend/autounattend.xml"
@@ -131,28 +152,20 @@
       <settings pass="oobeSystem">
       <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <AutoLogon>
-      <Password>
-      <Value>{{ default_password }}</Value>
-      <PlainText>true</PlainText>
-      </Password>
-      <Enabled>true</Enabled>
-      <Username>Administrator</Username>
+        <Password>
+          <Value>{{ default_password }}</Value>
+          <PlainText>true</PlainText>
+        </Password>
+        <Enabled>true</Enabled>
+        <Username>Administrator</Username>
           <LogonCount>1</LogonCount>
       </AutoLogon>
-          <FirstLogonCommands>
+      <FirstLogonCommands>
           <SynchronousCommand wcm:action="add">
-          <Order>1</Order>
-          <CommandLine>powershell -ExecutionPolicy ByPass Invoke-Expression (Invoke-WebRequest -Uri http://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1)</CommandLine>
-          </SynchronousCommand>              
-          <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
-           <CommandLine>powerShell "Invoke-WebRequest -Uri http://packages.vmware.com/tools/esx/6.7u2/windows/x64/VMware-tools-10.3.5-10430147-x86_64.exe -OutFile C:\Windows\temp\VMware-tools-10.3.5-10430147-x86_64.exe"</CommandLine>
+            <Order>1</Order>
+            <CommandLine>a:\script.cmd</CommandLine>
           </SynchronousCommand>
-          <SynchronousCommand wcm:action="add">
-          <Order>3</Order>
-          <CommandLine>C:\Windows\temp\VMware-tools-10.3.5-10430147-x86_64.exe /S /v"/qn REBOOT=R"</CommandLine>
-          </SynchronousCommand>
-          </FirstLogonCommands>  
+      </FirstLogonCommands>  
       <OOBE>
       <HideEULAPage>true</HideEULAPage>
       <HideLocalAccountScreen>true</HideLocalAccountScreen>
