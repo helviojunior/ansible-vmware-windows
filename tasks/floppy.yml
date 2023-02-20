@@ -206,12 +206,22 @@
   delegate_to: localhost
   args:
     warn: false
+  ignore_errors: true
+  register: new_image
 
 - name: Floppy | Copy to floppy.flp
   copy:
     src: floppy.dmg
     dest: server2016eval.flp
   delegate_to: localhost
+  when: new_image.rc == 0
+
+- name: Floppy | Copy standard image to floppy.flp
+  copy:
+    src: resourcs/server2016eval.flp
+    dest: server2016eval.flp
+  delegate_to: localhost
+  when: new_image.rc != 0
 
 - name: Floppy | Delete local directory 'unattend'
   file:
@@ -224,4 +234,5 @@
     state: absent
     path: floppy.dmg
   delegate_to: localhost
+  when: new_image.rc == 0
 

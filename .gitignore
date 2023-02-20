@@ -7,7 +7,6 @@ vars.yml
 #############
 unattend
 */unattend/*
-test.yml
 
 # Images #
 ##########
@@ -62,3 +61,7 @@ tmtagsHistory
 build
 dist
 *.egg-info
+
+# enable resources #
+####################
+!/resources/*
