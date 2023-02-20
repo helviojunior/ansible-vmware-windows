@@ -133,7 +133,8 @@
           unit_number: 0
           state: present
           type: iso
-          iso_path: '[{{ vcenter_datastore }}] {{ windows_iso }}'
+          iso_path: '[{{ vcenter_datastore }}] {{ file_path }}'
+          start_connected: true
       disk:
       - size_gb: '{{ vm_disk_gb }}'
         type: thin
@@ -150,6 +151,9 @@
     register: deploy_vm
 
   #  - debug: msg="{{deploy_vm}}"
+
+  # Power off the VM
+
 
   - name: Change virtual machine's boot order and related parameters
     vmware_guest_boot_manager:
