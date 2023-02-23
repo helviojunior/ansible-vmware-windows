@@ -254,7 +254,18 @@
       vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
       vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
       wait_for_process: true
-  
+
+  - name: Enable Remote Desktop
+    local_action:
+      module: vmware_vm_shell
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ vm_password_new }}'
+      vm_id: '{{ vm_name }}'
+      vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+      vm_shell_args: '-command "(New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0)"'
+      wait_for_process: true
+
   - name: Reboot-Guest
     vmware_guest_powerstate:
       <<: *esxi_login 
