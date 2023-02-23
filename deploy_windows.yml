@@ -305,6 +305,9 @@
       name: '{{ vm_name }}'
     delegate_to: localhost
     register: vmfacts
+    retries: 30
+    delay: 15
+    until: vmfacts['instance'] is defined and vmfacts['instance']['ipv4'] is defined and vmfacts['instance']['ipv4'] != ''
   
   - name: Get IP
     set_fact:
