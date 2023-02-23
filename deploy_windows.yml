@@ -255,6 +255,11 @@
       vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
       wait_for_process: true
 
+
+  #$text = 'New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0'
+  #$bytes = [System.Text.Encoding]::Unicode.GetBytes($text)
+  #$EncodedText = [Convert]::ToBase64String($bytes)
+  #Write-Output $EncodedText
   - name: Enable Remote Desktop
     local_action:
       module: vmware_vm_shell
@@ -263,8 +268,9 @@
       vm_password: '{{ vm_password_new }}'
       vm_id: '{{ vm_name }}'
       vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
-      vm_shell_args: '-command "(New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0)"'
+      vm_shell_args: '-enc TgBlAHcALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACIASABLAEwATQA6AFwAUwB5AHMAdABlAG0AXABDAHUAcgByAGUAbgB0AEMAbwBuAHQAcgBvAGwAUwBlAHQAXABDAG8AbgB0AHIAbwBsAFwAdABlAHIAbQBpAG4AYQBsACAAcwBlAHIAdgBlAHIAIgAgAC0ATgBhAG0AZQAgAGYARABlAG4AeQBUAFMAQwBvAG4AbgBlAGMAdABpAG8AbgBzACAALQBWAGEAbAB1AGUAIAAwAA=='
       wait_for_process: true
+    ignore_errors: true
 
   - name: Reboot-Guest
     vmware_guest_powerstate:
