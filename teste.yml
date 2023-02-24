@@ -1,0 +1,61 @@
+---
+- hosts: all
+  gather_facts: false
+  vars_files:
+    - vars.yml
+
+  vars:
+    
+    ansible_python_interpreter: "/usr/bin/python3"
+    vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
+    esxi_login: &esxi_login
+      hostname: '{{ vcenter_address }}'
+      username: '{{ vcenter_login }}'
+      password: '{{ vcenter_password }}'   
+      datacenter: '{{ vcenter_datacenter }}'
+      validate_certs: no  
+
+
+  tasks:
+  
+  - name: Creating a exec.txt file
+    copy:
+      dest: "exec.txt"
+      content: |
+        New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0 -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp\" -Name "UserAuthentication" -Value 1
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    delegate_to: localhost
+
+  - name: Send txt file
+    local_action:
+      module: vmware_guest_file_operation
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ vm_password_new }}'
+      vm_id: '{{ vm_name }}'
+      copy:
+        src: 'exec.txt'
+        dest: 'c:\windows\temp\exec.txt'
+        overwrite: True
+
+  - name: Delete local exec.txt
+    file:
+      state: absent
+      path: exec.txt
+    delegate_to: localhost
+
+  - name: Enable Remote Desktop
+    local_action:
+      module: vmware_vm_shell
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ vm_password_new }}'
+      vm_id: '{{ vm_name }}'
+      vm_shell_cwd: 'c:\windows\temp\'
+      vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+      vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
+      wait_for_process: true
+    ignore_errors: true
+

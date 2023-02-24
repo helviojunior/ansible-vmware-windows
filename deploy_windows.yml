@@ -255,11 +255,28 @@
       vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
       wait_for_process: true
 
+  - name: Creating a script to enable Remote Desktop
+    copy:
+      dest: "exec.txt"
+      content: |
+        New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0 -ErrorAction SilentlyContinue | Out-Null
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp\" -Name "UserAuthentication" -Value 1
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    delegate_to: localhost
 
-  #$text = 'New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0'
-  #$bytes = [System.Text.Encoding]::Unicode.GetBytes($text)
-  #$EncodedText = [Convert]::ToBase64String($bytes)
-  #Write-Output $EncodedText
+  - name: Send a script to enable Remote Desktop
+    local_action:
+      module: vmware_guest_file_operation
+      <<: *esxi_login
+      vm_username: Administrator
+      vm_password: '{{ vm_password_new }}'
+      vm_id: '{{ vm_name }}'
+      copy:
+        src: 'exec.txt'
+        dest: 'c:\windows\temp\exec.txt'
+        overwrite: True
+
   - name: Enable Remote Desktop
     local_action:
       module: vmware_vm_shell
@@ -267,10 +284,17 @@
       vm_username: Administrator
       vm_password: '{{ vm_password_new }}'
       vm_id: '{{ vm_name }}'
+      vm_shell_cwd: 'c:\windows\temp\'
       vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
-      vm_shell_args: '-enc TgBlAHcALQBJAHQAZQBtAFAAcgBvAHAAZQByAHQAeQAgAC0AUABhAHQAaAAgACIASABLAEwATQA6AFwAUwB5AHMAdABlAG0AXABDAHUAcgByAGUAbgB0AEMAbwBuAHQAcgBvAGwAUwBlAHQAXABDAG8AbgB0AHIAbwBsAFwAdABlAHIAbQBpAG4AYQBsACAAcwBlAHIAdgBlAHIAIgAgAC0ATgBhAG0AZQAgAGYARABlAG4AeQBUAFMAQwBvAG4AbgBlAGMAdABpAG8AbgBzACAALQBWAGEAbAB1AGUAIAAwAA=='
+      vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
       wait_for_process: true
     ignore_errors: true
+
+  - name: Delete script local copy
+    file:
+      state: absent
+      path: exec.txt
+    delegate_to: localhost
 
   - name: Reboot-Guest
     vmware_guest_powerstate:
@@ -301,7 +325,6 @@
   - name: Find the VM's IP Address via VMware tools
     vmware_guest_info:
       <<: *esxi_login
-      datacenter: ha-datacenter
       name: '{{ vm_name }}'
     delegate_to: localhost
     register: vmfacts
