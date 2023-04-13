@@ -8,7 +8,7 @@
 
 ```bash
 ansible-galaxy collection install community.vmware
-ansible-galaxy collection install ansible-galaxy collection install git+https://github.com/helviojunior/ansible-vmware-floppy.git
+ansible-galaxy collection install --force git+https://github.com/helviojunior/ansible-vmware-floppy.git
 ```
 
 Install pyvmomi lib from my repo, because I made a fix aboult Free ESXi licence limitation
