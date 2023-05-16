@@ -5,3 +5,11 @@
     name:
       - git+https://github.com/helviojunior/pyvmomi
   delegate_to: localhost
+
+- name: Base | Force urllib3 version
+  ansible.builtin.pip:
+    state: forcereinstall
+    name:
+      - urllib3==1.26.6 
+  delegate_to: localhost
+
