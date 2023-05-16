@@ -216,7 +216,7 @@
 
 - name: Floppy | Copy standard image to floppy.flp
   copy:
-    src: resourcs/server2016eval.flp
+    src: resources/server2016eval.flp
     dest: server2016eval.flp
   delegate_to: localhost
   when: new_image.rc != 0
