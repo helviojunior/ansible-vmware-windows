@@ -202,9 +202,13 @@
 
 - name: Floppy | Generating floppy image
   shell: |
+    rm -rf floppy.dmg
     hdiutil create -size 1440k -fs "MS-DOS FAT12" -layout NONE -srcfolder unattend -format UDRW -ov floppy.dmg
   delegate_to: localhost
-  ignore_errors: true
+  retries: 10
+  delay: 10
+  until: "new_image is not failed"
+  ignore_errors: yes
   register: new_image
 
 - name: Floppy | Copy to floppy.flp
