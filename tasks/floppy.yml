@@ -15,7 +15,7 @@
     content: |
       Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1'))
+      Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/helviojunior/ansible-vmware-windows/main/resources/ConfigureRemotingForAnsible.ps1'))
       Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u2/windows/x64/VMware-tools-11.2.5-17337674-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
   delegate_to: localhost
 
