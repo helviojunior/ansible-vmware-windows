@@ -348,6 +348,18 @@
       ansible_user: 'Administrator'
       ansible_password: '{{ vm_password_new }}'
 
+  - name: Create local directory 'output'
+    ansible.builtin.file:
+      path: output
+      state: directory
+    delegate_to: localhost
+
+  - name: Save host IP
+    copy:
+      dest: "output/{{ vm_name }}_ip.txt"
+      content: "{{ windows_ip }}"
+    delegate_to: localhost
+
 - hosts: "new_windows"
   gather_facts: true
   tasks:
@@ -371,5 +383,5 @@
       chdir: "c:/windows/temp"
     register: systeminfo
 
-  - debug: msg="{{ systeminfo['stdout_lines'] }}"   
+  - debug: msg="{{ systeminfo['stdout_lines'] }}"
 
