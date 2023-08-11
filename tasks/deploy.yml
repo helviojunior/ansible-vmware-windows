@@ -1,5 +1,5 @@
 ---
-- name: "Set Deploy vars"
+- name: "Set dynamic vars"
   set_fact:
     esxi_login: &esxi_login
       - hostname: '{{ vcenter_address }}'
