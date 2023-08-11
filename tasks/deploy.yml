@@ -246,6 +246,8 @@
 
 #As we are changing the password the ansible show an error of authentication failure
 # so, we need to ignore the error
+# 1 - In the previous step we already validated actual password
+# 2 - In the next step we will validate the new password
 - name: Change password
   local_action:
     module: vmware_vm_shell
