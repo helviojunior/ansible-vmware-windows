@@ -5,6 +5,28 @@
     - vars.yml
 
   vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+
+  tasks:
+  - include_tasks: 'tasks/base.yml'
+  - include_tasks: 'tasks/floppy.yml'
+  
+  - name: "Set VCenter Addr"
+    set_fact:
+      vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
+    when: vcenter_address is undefined
+
+  - name: Add vSphere
+    add_host:
+      name: '{{ vcenter_address }}'
+      group: "vSphere"
+
+- hosts: 'vSphere'
+  gather_facts: false
+  vars_files:
+    - vars.yml
+
+  vars:
     
     ansible_python_interpreter: "/usr/bin/python3"
     vcenter_address: '{{ hostvars[inventory_hostname]["inventory_hostname"] }}'
@@ -15,11 +37,10 @@
       datacenter: '{{ vcenter_datacenter }}'
       validate_certs: no  
 
-
   tasks:
-  - include_tasks: 'tasks/base.yml'
-  - include_tasks: 'tasks/floppy.yml'
-  
+
+  - debug: msg="vSphere IP {{ vcenter_address }}"
+
   - name: Gather vSphere schema information
     community.vmware.vmware_datacenter_info:
       <<: *esxi_login
