@@ -1,0 +1,369 @@
+---
+
+- debug: msg="vSphere IP {{ vcenter_address }}"
+
+- name: Gather vSphere schema information
+  community.vmware.vmware_datacenter_info:
+    <<: *esxi_login
+    schema: vsphere
+    properties:
+    - configStatus
+    - overallStatus
+  delegate_to: localhost
+  register: datacenter_info
+
+- name: Check VMWare datacenter status
+  fail: msg="Vmware datacenter is not Green"
+  when: "datacenter_info['datacenter_info'] is not defined or datacenter_info['datacenter_info'][0]['overallStatus'] is not defined or datacenter_info['datacenter_info'][0]['overallStatus'] != 'green'"
+
+- name: Gather datastore information
+  community.vmware.vmware_datastore_info:
+    <<: *esxi_login
+    schema: vsphere
+    properties:
+    - name
+    - overallStatus
+  delegate_to: localhost
+  register: datastore_info
+
+- name: Filter selected datastore
+  set_fact:
+    selected_datastore: "{{ datastore_info.datastores | json_query(jmesquery) | first }}"
+  vars:
+    jmesquery: "[? overallStatus==`green` && name==`{{ vcenter_datastore }}`].{Name: name, Status: overallStatus}"
+
+- name: Check selected datastore status
+  fail: msg="Vmware datastore {{ vcenter_datastore }} not exists or is not green"
+  when: "selected_datastore is not defined or selected_datastore['Name'] is not defined"
+
+- name: Create ISO directory at datastore {{ vcenter_datastore }}
+  community.vmware.vsphere_file:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    path: ISO
+    state: directory
+  delegate_to: localhost
+
+- name: Copy server2016eval.flp file to {{ vcenter_datastore }}/ISO folder
+  community.vmware.vsphere_copy:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    src: server2016eval.flp
+    path: ISO/server2016eval.flp
+  delegate_to: localhost
+
+- name: Check uploaded file
+  community.vmware.vsphere_file:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    path: ISO/server2016eval.flp
+    state: file
+  delegate_to: localhost
+
+- name: Set file path
+  set_fact:
+    file_path: 'ISO/{{ windows_iso }}'
+
+- name: Check if windows ISO is already exists
+  community.vmware.vsphere_file:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    path: '{{ file_path }}'
+    state: file
+  delegate_to: localhost
+  ignore_errors: true
+  register: iso_info
+
+- name: Check if ISO file is already exists
+  set_fact:
+    iso_exists: "{{ file_path in ([ iso_info ] | json_query(jmesquery) |\
+    map(attribute='Path') | list ) }}"
+  vars:
+    jmesquery: "[? path==`{{ file_path }}` && status==`200`].{Path: path, Status: status, Size: size}"
+
+- name: Download ISO
+  ansible.builtin.get_url:
+    url: '{{ windows_iso_url }}'
+    dest: './{{ windows_iso }}'
+  delegate_to: localhost
+  when: not iso_exists
+
+- name: Copy ISO file to {{ vcenter_datastore }}/ISO folder
+  community.vmware.vsphere_copy:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    src: '{{ windows_iso }}'
+    path: 'ISO/{{ windows_iso }}'
+  delegate_to: localhost
+  when: not iso_exists
+
+- name: Check uploaded ISO file
+  community.vmware.vsphere_file:
+    <<: *esxi_login
+    datastore: '{{ vcenter_datastore }}'
+    path: '{{ file_path }}'
+    state: file
+  delegate_to: localhost
+
+- name: Create a new Server 2016 VM
+  vmware_guest:
+    <<: *esxi_login
+    folder: /
+    name: '{{ vm_name }}'
+    state: present
+    guest_id: windows9Server64Guest
+    cdrom:
+      - controller_number: 0
+        unit_number: 0
+        state: present
+        type: iso
+        iso_path: '[{{ vcenter_datastore }}] {{ file_path }}'
+        start_connected: true
+    disk:
+    - size_gb: '{{ vm_disk_gb }}'
+      type: thin
+      datastore: '{{ vcenter_datastore }}'
+    hardware:
+      memory_mb: '{{ vm_memory_mb }}'
+      num_cpus: '{{ vm_num_cpus }}'
+      scsi: lsilogicsas
+    networks:
+    - name: '{{ vm_network }}'
+      device_type: e1000
+    wait_for_ip_address: no
+  delegate_to: localhost
+  register: deploy_vm
+
+#  - debug: msg="{{deploy_vm}}"
+
+# Power off the VM
+
+
+- name: Change virtual machine's boot order and related parameters
+  vmware_guest_boot_manager:
+    hostname: '{{ vcenter_address }}'
+    username: '{{ vcenter_login }}'
+    password: '{{ vcenter_password }}'  
+    validate_certs: no  
+    name: '{{ vm_name }}'
+    boot_delay: 1000
+    enter_bios_setup: False
+    boot_retry_enabled: True
+    boot_retry_delay: 20000
+    boot_firmware: bios
+    secure_boot_enabled: False
+    boot_order:
+      - cdrom
+      - disk
+      - ethernet
+      - floppy
+  delegate_to: localhost
+  register: vm_boot_order
+
+- name: Attach Floppy to VM
+  helviojunior.vmware.vmware_guest_floppy:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+    #state: absent
+    #type: none
+    type: flp
+    image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
+    start_connected: true
+  delegate_to: localhost
+  register: deploy_vm
+
+- name: Power-On the virtual machine
+  vmware_guest_powerstate:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+    state: powered-on
+  delegate_to: localhost
+  register: powerstate
+
+- name: Wait for VMware tools to become available 
+  vmware_guest_tools_wait:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+  delegate_to: localhost
+  retries: 3
+  delay: 15
+  register: result           
+  until: result is succeeded 
+
+- name: Detach CDROM
+  vmware_guest:
+    <<: *esxi_login
+    folder: /
+    name: '{{ vm_name }}'
+    state: present
+    cdrom:
+      - controller_number: 0
+        unit_number: 0
+        state: present
+        type: none
+        start_connected: false
+  delegate_to: localhost
+  register: deploy_vm
+
+- name: Detach Floppy
+  helviojunior.vmware.vmware_guest_floppy:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+    state: present
+    type: none
+  delegate_to: localhost
+  register: deploy_vm
+
+- name: Set password via vmware_vm_shell
+  local_action:
+    module: vmware_vm_shell
+    <<: *esxi_login
+    vm_username: 'Administrator'
+    vm_password: '{{ default_password }}'
+    vm_id: '{{ vm_name }}'
+    vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+    vm_shell_args: '-command "(net user Administrator {{ vm_password_new }})"'
+    wait_for_process: true
+  ignore_errors: yes
+
+- name: Rename Computer via vmware_vm_shell
+  local_action:
+    module: vmware_vm_shell
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+    vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
+    wait_for_process: true
+
+- name: Creating a script to enable Remote Desktop
+  copy:
+    dest: "exec.txt"
+    content: |
+      New-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0 -ErrorAction SilentlyContinue | Out-Null
+      Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\terminal server" -Name fDenyTSConnections -Value 0
+      Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp\" -Name "UserAuthentication" -Value 1
+      Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+  delegate_to: localhost
+
+- name: Send a script to enable Remote Desktop
+  local_action:
+    module: vmware_guest_file_operation
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    copy:
+      src: 'exec.txt'
+      dest: 'c:\windows\temp\exec.txt'
+      overwrite: True
+
+- name: Enable Remote Desktop
+  local_action:
+    module: vmware_vm_shell
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    vm_shell_cwd: 'c:\windows\temp\'
+    vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+    vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
+    wait_for_process: true
+  ignore_errors: true
+
+- name: Delete script local copy
+  file:
+    state: absent
+    path: exec.txt
+  delegate_to: localhost
+
+- name: Reboot-Guest
+  vmware_guest_powerstate:
+    <<: *esxi_login 
+    name: '{{ vm_name }}'
+    state: reboot-guest
+  delegate_to: localhost
+  register: deploy
+
+- name: Wait for 30 seconds
+  wait_for: timeout=30
+  delegate_to: localhost
+
+- name: Wait for VMware tools to become available by name
+  vmware_guest_tools_wait:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+  delegate_to: localhost
+  retries: 3
+  delay: 15
+  register: result           
+  until: result is succeeded 
+
+- name: Wait for 30 seconds for VMware Tools refresh
+  wait_for: timeout=30
+  delegate_to: localhost
+
+- name: Find the VM's IP Address via VMware tools
+  vmware_guest_info:
+    <<: *esxi_login
+    name: '{{ vm_name }}'
+  delegate_to: localhost
+  register: vmfacts
+  retries: 30
+  delay: 15
+  until: vmfacts['instance'] is defined and vmfacts['instance']['ipv4'] is defined and vmfacts['instance']['ipv4'] != ''
+
+- name: Get IP
+  set_fact:
+    windows_ip: "{{ vmfacts['instance']['ipv4'] }}"
+
+- debug: msg="IP Address - {{ windows_ip }}"   
+
+- name: Add new VM Windows to Ansible Hosts
+  add_host:
+    name: '{{ windows_ip }}'
+    group: "new_windows"
+    ansible_connection: winrm
+    ansible_winrm_transport: ntlm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_user: 'Administrator'
+    ansible_password: '{{ vm_password_new }}'
+
+- name: Create local directory 'output'
+  ansible.builtin.file:
+    path: output
+    state: directory
+  delegate_to: localhost
+
+- name: Save host IP
+  copy:
+    dest: "output/{{ vm_name }}_ip.txt"
+    content: "{{ windows_ip }}"
+  delegate_to: localhost
+
+- hosts: "new_windows"
+gather_facts: true
+tasks:
+
+#- name: Base | Enable .NET Windows features
+#  win_feature:
+#    name: as-net-framework, web-asp-net45
+#    state: present
+
+#- name: Base | Install .NET framework
+#  win_package:
+#    path: "https://download.microsoft.com/download/E/4/1/E4173890-A24A-4936-9FC9-AF930FE3FA40/NDP461-KB3102436-x86-x64-AllOS-ENU.exe"
+#    product_id: "{BD6F5371-DAC1-30F0-9DDE-CAC6791E28C3}"
+#    state: present
+#    arguments: /q /norestart
+
+
+- name: Running systeminfo (just to test WinRM connection)
+  win_command: cmd.exe /c systeminfo
+  args:
+    chdir: "c:/windows/temp"
+  register: systeminfo
+
+- debug: msg="{{ systeminfo['stdout_lines'] }}"
+
