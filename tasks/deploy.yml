@@ -355,10 +355,15 @@
 
 - debug: msg="IP Address - {{ windows_ip }}"   
 
+- name: "Set new windows inventory host group"
+  set_fact:
+    host_group: 'new_windows'
+  when: host_group is not defined or host_group == ''
+
 - name: Add new VM Windows to Ansible Hosts
   add_host:
     name: '{{ windows_ip }}'
-    group: "new_windows"
+    group: '{{ host_group }}'
     ansible_connection: winrm
     ansible_winrm_transport: ntlm
     ansible_winrm_server_cert_validation: ignore
