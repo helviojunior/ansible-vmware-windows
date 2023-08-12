@@ -13,6 +13,14 @@
   copy:
     dest: "unattend/script.txt"
     content: |
+
+      try {
+        $userAccount = Get-LocalUser -Name "Administrator" -ErrorAction Ignore
+        $secPassword = ConvertTo-SecureString "@Pass123456" -AsPlainText -Force
+        $userAccount | Set-LocalUser -Password $secPassword
+      }
+      catch { }
+
       Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/helviojunior/ansible-vmware-windows/main/resources/ConfigureRemotingForAnsible.ps1'))
