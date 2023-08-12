@@ -19,7 +19,10 @@
         $secPassword = ConvertTo-SecureString "@Pass123456" -AsPlainText -Force
         $userAccount | Set-LocalUser -Password $secPassword
       }
-      catch { }
+      catch {
+        Write-Host "An error occurred:"
+        Write-Host $_
+      }
 
       Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -34,7 +37,7 @@
       @echo off
       a:
       cd a:\
-      powershell -ExecutionPolicy ByPass -enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAcwBjAHIAaQBwAHQALgB0AHgAdAAKACQARgBpAGwAZQBEAGEAdABhACAAfAAgAEkAbgB2AG8AawBlAC0ARQB4AHAAcgBlAHMAcwBpAG8AbgA=
+      powershell -ExecutionPolicy ByPass -EncodedCommand JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAcwBjAHIAaQBwAHQALgB0AHgAdAAKACQARgBpAGwAZQBEAGEAdABhACAAfAAgAEkAbgB2AG8AawBlAC0ARQB4AHAAcgBlAHMAcwBpAG8AbgA=
       C:\Windows\temp\VMware-tools.exe /S /v"/qn REBOOT=R"
   delegate_to: localhost
 
