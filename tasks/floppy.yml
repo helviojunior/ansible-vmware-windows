@@ -14,15 +14,9 @@
     dest: "unattend/script.txt"
     content: |
 
-      try {
-        $userAccount = Get-LocalUser -Name "Administrator" -ErrorAction Ignore
-        $secPassword = ConvertTo-SecureString "@Pass123456" -AsPlainText -Force
-        $userAccount | Set-LocalUser -Password $secPassword
-      }
-      catch {
-        Write-Host "An error occurred:"
-        Write-Host $_
-      }
+      $userAccount = Get-LocalUser -Name "Administrator" -ErrorAction Ignore
+      $secPassword = ConvertTo-SecureString "@Pass123456" -AsPlainText -Force -ErrorAction Ignore
+      $userAccount | Set-LocalUser -Password $secPassword -ErrorAction Ignore
 
       Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
