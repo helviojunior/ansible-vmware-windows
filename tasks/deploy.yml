@@ -239,6 +239,20 @@
       $UserAccount | Set-LocalUser -Password $SecPassword
   delegate_to: localhost
 
+- name: Check password
+  local_action:
+    module: vmware_vm_shell
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    vm_shell_cwd: 'c:\windows\temp\'
+    vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+    vm_shell_args: '-Command Get-Host'
+    wait_for_process: true
+  ignore_errors: true
+  register: check_pass
+
 - name: Send a script to change password
   local_action:
     module: vmware_guest_file_operation
@@ -250,6 +264,7 @@
       src: '{{ tmp_file }}'
       dest: 'c:\windows\temp\exec.txt'
       overwrite: True
+  when: "check_pass is defined and not check_pass.changed"
 
 #As we are changing the password the ansible show an error of authentication failure
 # so, we need to ignore the error
@@ -267,6 +282,7 @@
     vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
     wait_for_process: true
   ignore_errors: true
+  when: "check_pass is defined and not check_pass.changed"
 
 - name: Rename Computer via vmware_vm_shell
   local_action:
