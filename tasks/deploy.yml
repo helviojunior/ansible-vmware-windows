@@ -41,28 +41,38 @@
   delegate_to: '{{ vcenter_address }}'
   register: datastore_info
 
+- name: Filter temp datastore
+  set_fact:
+    temp_datastore: "{{ datastore_info.datastores | json_query(jmesquery) | first }}"
+  vars:
+    jmesquery: "[? overallStatus==`green` && name==`datastore1`].name"
+
 - name: Filter selected datastore
   set_fact:
     selected_datastore: "{{ datastore_info.datastores | json_query(jmesquery) | first }}"
   vars:
-    jmesquery: "[? overallStatus==`green` && name==`{{ vcenter_datastore }}`].{Name: name, Status: overallStatus}"
+    jmesquery: "[? overallStatus==`green` && name==`{{ vcenter_datastore }}`].name"
+
+- name: Check temp datastore status
+  fail: msg="Vmware datastore {{ temp_datastore }} not exists or is not green"
+  when: "temp_datastore is not defined or temp_datastore|length == 0"
 
 - name: Check selected datastore status
-  fail: msg="Vmware datastore {{ vcenter_datastore }} not exists or is not green"
-  when: "selected_datastore is not defined or selected_datastore['Name'] is not defined"
+  fail: msg="Vmware datastore {{ selected_datastore }} not exists or is not green"
+  when: "selected_datastore is not defined or selected_datastore|length == 0"
 
-- name: Create ISO directory at datastore {{ vcenter_datastore }}
+- name: Create ISO directory at datastore {{ selected_datastore }}
   community.vmware.vsphere_file:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     path: ISO
     state: directory
   delegate_to: '{{ vcenter_address }}'
 
-- name: Copy server2016eval.flp file to {{ vcenter_datastore }}/ISO folder
+- name: Copy server2016eval.flp file to {{ temp_datastore }}/ISO folder
   community.vmware.vsphere_copy:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     src: server2016eval.flp
     path: ISO/server2016eval.flp
   delegate_to: '{{ vcenter_address }}'
@@ -70,7 +80,7 @@
 - name: Check uploaded file
   community.vmware.vsphere_file:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     path: ISO/server2016eval.flp
     state: file
   delegate_to: '{{ vcenter_address }}'
@@ -82,7 +92,7 @@
 - name: Check if windows ISO is already exists
   community.vmware.vsphere_file:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     path: '{{ file_path }}'
     state: file
   delegate_to: '{{ vcenter_address }}'
@@ -103,10 +113,10 @@
   delegate_to: '{{ vcenter_address }}'
   when: not iso_exists
 
-- name: Copy ISO file to {{ vcenter_datastore }}/ISO folder
+- name: Copy ISO file to {{ temp_datastore }}/ISO folder
   community.vmware.vsphere_copy:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     src: '{{ windows_iso }}'
     path: 'ISO/{{ windows_iso }}'
   delegate_to: '{{ vcenter_address }}'
@@ -115,7 +125,7 @@
 - name: Check uploaded ISO file
   community.vmware.vsphere_file:
     <<: *esxi_login
-    datastore: '{{ vcenter_datastore }}'
+    datastore: '{{ temp_datastore }}'
     path: '{{ file_path }}'
     state: file
   delegate_to: '{{ vcenter_address }}'
@@ -132,12 +142,12 @@
         unit_number: 0
         state: present
         type: iso
-        iso_path: '[{{ vcenter_datastore }}] {{ file_path }}'
+        iso_path: '[{{ temp_datastore }}] {{ file_path }}'
         start_connected: true
     disk:
     - size_gb: '{{ vm_disk_gb }}'
       type: thin
-      datastore: '{{ vcenter_datastore }}'
+      datastore: '{{ selected_datastore }}'
     hardware:
       memory_mb: '{{ vm_memory_mb }}'
       num_cpus: '{{ vm_num_cpus }}'
@@ -182,7 +192,7 @@
     #state: absent
     #type: none
     type: flp
-    image_file: '[{{ vcenter_datastore }}] ISO/server2016eval.flp'
+    image_file: '[{{ temp_datastore }}] ISO/server2016eval.flp'
     start_connected: true
   delegate_to: '{{ vcenter_address }}'
   register: deploy_vm
