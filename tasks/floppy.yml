@@ -9,17 +9,30 @@
   register: local_dir
   delegate_to: localhost
 
-- name: Floppy | Creating a script.txt file
+- name: Floppy | Creating a step1.ps1 file
   copy:
-    dest: "unattend/script.txt"
+    dest: "unattend/step1.ps1"
     content: |
       $userAccount = Get-LocalUser -Name "Administrator" -ErrorAction Ignore
       $secPassword = ConvertTo-SecureString "@Pass123456" -AsPlainText -Force -ErrorAction Ignore
       $userAccount | Set-LocalUser -Password $secPassword -ErrorAction Ignore
-      Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+  delegate_to: localhost
+
+- name: Floppy | Creating a step2.ps1 file
+  copy:
+    dest: "unattend/step2.ps1"
+    content: |
+      [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+      Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u2/windows/x64/VMware-tools-11.2.5-17337674-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
+  delegate_to: localhost
+
+- name: Floppy | Creating a step3.ps1 file
+  copy:
+    dest: "unattend/step3.ps1"
+    content: |
+      Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction Ignore
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/helviojunior/ansible-vmware-windows/main/resources/ConfigureRemotingForAnsible.ps1'))
-      Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u2/windows/x64/VMware-tools-11.2.5-17337674-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
   delegate_to: localhost
 
 - name: Floppy | Creating a script.cmd file
@@ -29,7 +42,9 @@
       @echo off
       a:
       cd a:\
-      powershell -ExecutionPolicy ByPass -EncodedCommand JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAcwBjAHIAaQBwAHQALgB0AHgAdAAKACQARgBpAGwAZQBEAGEAdABhACAAfAAgAEkAbgB2AG8AawBlAC0ARQB4AHAAcgBlAHMAcwBpAG8AbgA=
+      powershell -ExecutionPolicy ByPass -File a:\step1.ps1
+      powershell -ExecutionPolicy ByPass -File a:\step2.ps1
+      powershell -ExecutionPolicy ByPass -File a:\step3.ps1
       C:\Windows\temp\VMware-tools.exe /S /v"/qn REBOOT=R"
   delegate_to: localhost
 
