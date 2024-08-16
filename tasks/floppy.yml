@@ -218,9 +218,14 @@
       </unattend>
   delegate_to: localhost
 
-- name: Floppy | Generating floppy image
+- name: Floppy | Removing old release
   shell: |
     rm -rf floppy.dmg
+  delegate_to: localhost
+  ignore_errors: yes
+
+- name: Floppy | Generating floppy image
+  shell: |
     hdiutil create -size 1440k -fs "MS-DOS FAT12" -layout NONE -srcfolder unattend -format UDRW -ov floppy.dmg
   delegate_to: localhost
   retries: 10
