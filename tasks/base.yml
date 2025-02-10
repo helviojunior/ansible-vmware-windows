@@ -13,3 +13,13 @@
       - urllib3==1.26.6 
   delegate_to: localhost
 
+- name: Base | Install Python packages
+  ansible.builtin.pip:
+    state: install
+    name:
+      - jmespath
+      - requests
+      - pywinrm
+      - netaddr
+      - requests-credssp
+  delegate_to: localhost
