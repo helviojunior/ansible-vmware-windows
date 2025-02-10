@@ -228,7 +228,7 @@
   shell: |
     hdiutil create -size 1440k -fs "MS-DOS FAT12" -layout NONE -srcfolder unattend -format UDRW -ov floppy.dmg
   delegate_to: localhost
-  retries: 10
+  retries: 5
   delay: 10
   until: "new_image is not failed"
   ignore_errors: yes
