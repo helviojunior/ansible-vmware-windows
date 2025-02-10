@@ -15,7 +15,7 @@
 
 - name: Base | Install Python packages
   ansible.builtin.pip:
-    state: install
+    state: latest
     name:
       - jmespath
       - requests
