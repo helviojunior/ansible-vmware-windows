@@ -249,7 +249,7 @@
       $UserAccount | Set-LocalUser -Password $SecPassword
   delegate_to: localhost
 
-- name: Check password
+- name: Check if the password has already been changed
   local_action:
     module: vmware_vm_shell
     <<: *esxi_login
