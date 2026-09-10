@@ -143,7 +143,6 @@
         state: present
         type: iso
         iso_path: '[{{ temp_datastore }}] {{ file_path }}'
-        start_connected: true
     disk:
     - size_gb: '{{ vm_disk_gb }}'
       type: thin
