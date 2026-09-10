@@ -134,6 +134,9 @@
     <<: *esxi_login
     folder: /
     name: '{{ vm_name }}'
+    # O nome da VM costuma ser gerado (vm-<id>); a descrição guarda o nome
+    # legível de quem pediu o deploy.
+    annotation: "{{ vm_annotation | default('') }}"
     state: present
     guest_id: windows9Server64Guest
     cdrom:
@@ -296,6 +299,11 @@
   when: "check_pass is defined and not check_pass.changed"
 
 - name: Rename Computer via vmware_vm_shell
+  # Nome de computador do Windows: 15 caracteres, sem espaço nem pontuação — o
+  # nome da VM no vCenter não serve. `vm_hostname` vem do orquestrador
+  # (vm<13 hex>); fora dele, sanitiza e corta o nome da VM.
+  vars:
+    computer_name: "{{ (vm_hostname | default('') | trim) | default(vm_name | regex_replace('[^A-Za-z0-9-]', '-') | truncate(15, true, ''), true) }}"
   local_action:
     module: vmware_vm_shell
     <<: *esxi_login
@@ -303,7 +311,7 @@
     vm_password: '{{ vm_password_new }}'
     vm_id: '{{ vm_name }}'
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
-    vm_shell_args: '-command "(Rename-Computer -NewName {{ vm_name }})"'
+    vm_shell_args: '-command "(Rename-Computer -NewName {{ computer_name }} -Force)"'
     wait_for_process: true
 
 - name: Creating a script to enable Remote Desktop
