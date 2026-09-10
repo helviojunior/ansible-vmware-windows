@@ -260,6 +260,9 @@
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
     vm_shell_args: '-Command Get-Host'
     wait_for_process: true
+    # Sem isto o módulo espera o padrão dele (3600s): um processo
+    # travado no guest seguraria o deploy por uma hora.
+    timeout: 300
   ignore_errors: true
   register: check_pass
 
@@ -295,6 +298,9 @@
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
     vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
     wait_for_process: true
+    # Sem isto o módulo espera o padrão dele (3600s): um processo
+    # travado no guest seguraria o deploy por uma hora.
+    timeout: 300
   ignore_errors: true
   when: "check_pass is defined and not check_pass.changed"
 
@@ -309,6 +315,9 @@
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
     vm_shell_args: '-Command Get-Host'
     wait_for_process: true
+    # Sem isto o módulo espera o padrão dele (3600s): um processo
+    # travado no guest seguraria o deploy por uma hora.
+    timeout: 300
   ignore_errors: false
   when: "check_pass is defined and not check_pass.changed"
 
@@ -327,6 +336,9 @@
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
     vm_shell_args: '-command "(Rename-Computer -NewName {{ computer_name }} -Force)"'
     wait_for_process: true
+    # Sem isto o módulo espera o padrão dele (3600s): um processo
+    # travado no guest seguraria o deploy por uma hora.
+    timeout: 300
 
 - name: Creating a script to enable Remote Desktop
   copy:
@@ -361,6 +373,9 @@
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
     vm_shell_args: '-enc JABGAGkAbABlAEQAYQB0AGEAIAA9ACAARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAZQB4AGUAYwAuAHQAeAB0AAoAJABGAGkAbABlAEQAYQB0AGEAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=='
     wait_for_process: true
+    # Sem isto o módulo espera o padrão dele (3600s): um processo
+    # travado no guest seguraria o deploy por uma hora.
+    timeout: 300
   ignore_errors: true
 
 - name: Delete script local copy
