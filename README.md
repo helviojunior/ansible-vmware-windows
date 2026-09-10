@@ -16,6 +16,18 @@ Install pyvmomi lib from my repo, because I made a fix aboult Free ESXi licence 
 python3 -m pip install git+https://github.com/helviojunior/pyvmomi
 ```
 
+`tasks/base.yml` does this for you when a lib is missing, adding
+`--break-system-packages` if the controller python is externally managed
+(PEP 668, Debian 12+). Two optional flags:
+
+```bash
+# force a reinstall of the controller libs (e.g. to update the pyvmomi fork)
+ansible-playbook -i $ip, deploy_windows.yml -e install_controller_deps=true
+
+# pin urllib3==1.26.6 — only needed for old ESXi with legacy SSL
+ansible-playbook -i $ip, deploy_windows.yml -e pin_urllib3=true
+```
+
 ## Executing
 
 ```bash
