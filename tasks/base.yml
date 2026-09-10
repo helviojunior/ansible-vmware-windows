@@ -1,25 +1,82 @@
 ---
-- name: Base | Installing custom python pyvmomi
-  ansible.builtin.pip:
-    state: forcereinstall
-    name:
-      - git+https://github.com/helviojunior/pyvmomi
+# Dependências do controller (a máquina que roda o ansible).
+#
+# Os módulos community.vmware / winrm rodam no python do ansible, que não é
+# necessariamente o mesmo onde as libs foram instaladas — num container com
+# ansible do apt e as libs no python do app, por exemplo, o módulo falha com
+# "Failed to import the required Python library (PyVmomi)".
+- name: Base | Check the controller python packages
+  ansible.builtin.command: >-
+    {{ ansible_python_interpreter | default('/usr/bin/python3') }}
+    -c "import pyVmomi, jmespath, requests, netaddr, winrm"
+  register: controller_deps
+  changed_when: false
+  failed_when: false
   delegate_to: localhost
 
-- name: Base | Force urllib3 version
-  ansible.builtin.pip:
-    state: forcereinstall
-    name:
-      - urllib3==1.26.6 
+# pyvmomi vem do fork do helviojunior por causa do fix da limitação de licença
+# free do ESXi. O --break-system-packages cobre o PEP 668 (Debian 12+), onde o
+# python do sistema é "externally managed" e o pip recusa instalar sem a flag;
+# pip antigo não conhece a flag, daí a segunda tentativa.
+#
+# Só instala quando falta alguma lib: reinstalar a cada deploy custa minutos e
+# mexe num interpretador que pode ser o do sistema. Para forçar (atualizar o
+# fork do pyvmomi, por exemplo), passe -e install_controller_deps=true.
+- name: Base | Install the controller python packages
+  ansible.builtin.shell: |
+    set -e
+    PY="{{ ansible_python_interpreter | default('/usr/bin/python3') }}"
+    PKGS="git+https://github.com/helviojunior/pyvmomi jmespath netaddr requests pywinrm requests-credssp"
+    {% if install_controller_deps | default(false) | bool %}
+    FLAGS="--force-reinstall"
+    {% else %}
+    FLAGS=""
+    {% endif %}
+    $PY -m pip install --no-cache-dir $FLAGS $PKGS \
+      || $PY -m pip install --no-cache-dir --break-system-packages $FLAGS $PKGS
   delegate_to: localhost
+  register: controller_deps_install
+  failed_when: false
+  when: controller_deps.rc != 0 or (install_controller_deps | default(false) | bool)
 
-- name: Base | Install Python packages
-  ansible.builtin.pip:
-    state: latest
-    name:
-      - jmespath
-      - requests
-      - pywinrm
-      - netaddr
-      - requests-credssp
+# urllib3 2.x quebra a autenticação de alguns ESXi antigos (SSL legado). O pin
+# fica opcional porque rebaixar a lib no python do sistema pode quebrar outros
+# pacotes: ligue com -e pin_urllib3=true só onde for necessário.
+- name: Base | Pin urllib3 (ESXi antigo)
+  ansible.builtin.shell: |
+    set -e
+    PY="{{ ansible_python_interpreter | default('/usr/bin/python3') }}"
+    $PY -m pip install --no-cache-dir --force-reinstall 'urllib3==1.26.6' \
+      || $PY -m pip install --no-cache-dir --break-system-packages --force-reinstall 'urllib3==1.26.6'
   delegate_to: localhost
+  failed_when: false
+  when: pin_urllib3 | default(false) | bool
+
+# Sem pyvmomi no python do ansible os módulos community.vmware falham logo
+# adiante com uma mensagem que não diz o que fazer; melhor parar aqui.
+- name: Base | Check the controller python packages again
+  ansible.builtin.command: >-
+    {{ ansible_python_interpreter | default('/usr/bin/python3') }}
+    -c "import pyVmomi, jmespath, requests, netaddr, winrm"
+  register: controller_deps_final
+  changed_when: false
+  failed_when: false
+  delegate_to: localhost
+  when: controller_deps.rc != 0
+
+- name: Base | Fail when the controller is missing the python packages
+  ansible.builtin.fail:
+    msg: >-
+      O python do ansible
+      ({{ ansible_python_interpreter | default('/usr/bin/python3') }}) não tem
+      as libs necessárias e a instalação automática falhou
+      ({{ (controller_deps_install.stderr | default('sem pip?')) | trim }}).
+      Instale no MESMO interpretador que roda o ansible:
+      {{ ansible_python_interpreter | default('/usr/bin/python3') }} -m pip
+      install git+https://github.com/helviojunior/pyvmomi jmespath netaddr
+      requests pywinrm requests-credssp
+      (acrescente --break-system-packages no Debian 12+; se faltar o pip,
+      instale o python3-pip).
+  when:
+    - controller_deps.rc != 0
+    - controller_deps_final.rc | default(1) != 0
