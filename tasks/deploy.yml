@@ -265,7 +265,9 @@
     module: vmware_guest_file_operation
     <<: *esxi_login
     vm_username: Administrator
-    vm_password: '@Pass123456' # the first password set by unattended script
+    # Senha inicial do unattended: a do floppy gerado agora ou a lida da
+    # imagem de fábrica (tasks/floppy.yml define unattend_admin_password).
+    vm_password: "{{ unattend_admin_password | default('@Pass123456') }}"
     vm_id: '{{ vm_name }}'
     copy:
       src: '{{ tmp_file }}'
@@ -282,7 +284,9 @@
     module: vmware_vm_shell
     <<: *esxi_login
     vm_username: Administrator
-    vm_password: '@Pass123456' # the first password set by unattended script
+    # Senha inicial do unattended: a do floppy gerado agora ou a lida da
+    # imagem de fábrica (tasks/floppy.yml define unattend_admin_password).
+    vm_password: "{{ unattend_admin_password | default('@Pass123456') }}"
     vm_id: '{{ vm_name }}'
     vm_shell_cwd: 'c:\windows\temp\'
     vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'

@@ -220,33 +220,126 @@
 
 - name: Floppy | Removing old release
   shell: |
-    rm -rf floppy.dmg
+    rm -rf floppy.dmg server2016eval.flp
   delegate_to: localhost
   ignore_errors: yes
 
-- name: Floppy | Generating floppy image
+# A imagem pode ser gerada de dois jeitos, conforme o controller: hdiutil
+# (macOS) ou dosfstools + mtools (Linux). O caminho Linux importa porque o
+# playbook normalmente roda de dentro de um container.
+- name: Floppy | Look for the image tooling
   shell: |
+    echo "hdiutil=$(command -v hdiutil || true)"
+    echo "mkfs=$(command -v mkfs.msdos || command -v mkfs.vfat || true)"
+    echo "mcopy=$(command -v mcopy || true)"
+  args:
+    executable: /bin/bash
+  delegate_to: localhost
+  changed_when: false
+  register: floppy_tools
+
+- name: Floppy | Available tooling
+  set_fact:
+    floppy_has_hdiutil: "{{ 'hdiutil=/' in floppy_tools.stdout }}"
+    floppy_has_mcopy: "{{ 'mcopy=/' in floppy_tools.stdout }}"
+    floppy_mkfs: "{{ (floppy_tools.stdout_lines | select('match', '^mkfs=/') | list | first | default('mkfs='))[5:] }}"
+
+- name: Floppy | Generating floppy image (macOS, hdiutil)
+  shell: |
+    set -e
     hdiutil create -size 1440k -fs "MS-DOS FAT12" -layout NONE -srcfolder unattend -format UDRW -ov floppy.dmg
+    cp floppy.dmg server2016eval.flp
+  args:
+    executable: /bin/bash
   delegate_to: localhost
   retries: 5
   delay: 10
   until: "new_image is not failed"
   ignore_errors: yes
   register: new_image
+  when: floppy_has_hdiutil | bool
 
-- name: Floppy | Copy to floppy.flp
-  copy:
-    src: floppy.dmg
-    dest: server2016eval.flp
+# 1.44 MB, FAT12, arquivos copiados com o mtools: sem root e sem loop device —
+# é o que faz isto funcionar dentro de um container.
+- name: Floppy | Generating floppy image (Linux, dosfstools + mtools)
+  shell: |
+    set -e
+    rm -f server2016eval.flp
+    dd if=/dev/zero of=server2016eval.flp bs=1024 count=1440 status=none
+    "{{ floppy_mkfs }}" -F 12 -n UNATTEND server2016eval.flp >/dev/null
+    mcopy -i server2016eval.flp -s -o unattend/* ::
+    mdir -i server2016eval.flp ::
+  args:
+    executable: /bin/bash
   delegate_to: localhost
-  when: new_image.rc == 0
+  retries: 3
+  delay: 5
+  until: "new_image is not failed"
+  ignore_errors: yes
+  register: new_image
+  when:
+    - not (floppy_has_hdiutil | bool)
+    - floppy_mkfs | length > 0
+    - floppy_has_mcopy | bool
 
-- name: Floppy | Copy standard image to floppy.flp
+- name: Floppy | Image generated
+  set_fact:
+    floppy_generated: "{{ (new_image is defined) and ((new_image.rc | default(1)) == 0) }}"
+
+# Sem ferramenta nenhuma: usa a imagem versionada no repositório. Ela sobe uma
+# VM funcional, mas com o autounattend de fábrica — sem as personalizações
+# desta execução.
+- name: Floppy | Copy standard image to floppy.flp (fallback)
   copy:
     src: resources/server2016eval.flp
     dest: server2016eval.flp
   delegate_to: localhost
-  when: new_image.rc != 0
+  when: not (floppy_generated | bool)
+
+# A imagem de fábrica traz a própria senha inicial embutida: em vez de assumir
+# qual é, lê da imagem — é com ela que o deploy.yml entra na VM depois.
+- name: Floppy | Read the password embedded in the standard image
+  shell: |
+    set -o pipefail
+    img=resources/server2016eval.flp
+    pass=""
+    if command -v mcopy >/dev/null 2>&1; then
+      pass=$(mcopy -i "$img" ::/step1.ps1 - 2>/dev/null | tr -d '\r' \
+             | grep -o 'ConvertTo-SecureString "[^"]*"' | head -1 | cut -d'"' -f2)
+    fi
+    # Sem mtools, o .ps1 e o XML estão em texto puro dentro da imagem FAT.
+    if [ -z "$pass" ]; then
+      pass=$(tr -d '\r' < "$img" | grep -a -o 'ConvertTo-SecureString "[^"]*"' \
+             | head -1 | cut -d'"' -f2)
+    fi
+    if [ -z "$pass" ]; then
+      pass=$(tr -d '\r\n' < "$img" | grep -a -o '<AdministratorPassword>.\{0,200\}' \
+             | grep -a -o '<Value>[^<]*</Value>' | head -1 \
+             | sed 's|<Value>||; s|</Value>||')
+    fi
+    printf '%s' "$pass"
+  args:
+    executable: /bin/bash
+  delegate_to: localhost
+  changed_when: false
+  failed_when: false
+  register: stock_floppy_password
+  when: not (floppy_generated | bool)
+
+- name: Floppy | Warn about the fallback image
+  debug:
+    msg: >-
+      Sem ferramenta para gerar o floppy (hdiutil no macOS; dosfstools + mtools
+      no Linux): a VM vai subir com o autounattend de fábrica desta imagem, sem
+      as personalizações deste deploy. Senha inicial lida da imagem:
+      "{{ stock_floppy_password.stdout | default('') | trim | default('@Pass123456', true) }}".
+  when: not (floppy_generated | bool)
+
+# Senha com que o deploy.yml entra na VM logo depois da instalação: a do floppy
+# gerado agora (step1.ps1) ou a lida da imagem de fábrica.
+- name: Floppy | Initial administrator password
+  set_fact:
+    unattend_admin_password: "{{ stock_floppy_password.stdout | default('') | trim | default('@Pass123456', true) }}"
 
 - name: Floppy | Delete local directory 'unattend'
   file:
@@ -259,5 +352,4 @@
     state: absent
     path: floppy.dmg
   delegate_to: localhost
-  when: new_image.rc == 0
 
