@@ -14,7 +14,6 @@
 - name: Add vSphere
   add_host:
     name: '{{ vcenter_address }}'
-    connection: local
     ansible_connection: local
 
 - name: Gather vSphere schema information
@@ -225,7 +224,6 @@
         unit_number: 0
         state: present
         type: none
-        start_connected: false
   delegate_to: '{{ vcenter_address }}'
   register: deploy_vm
 
