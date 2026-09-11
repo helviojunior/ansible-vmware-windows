@@ -199,7 +199,7 @@
   register: deploy_vm
 
 - name: Power-On the virtual machine
-  vmware_guest_powerstate:
+  vmware.vmware.vm_powerstate:
     <<: *esxi_login
     name: '{{ vm_name }}'
     state: powered-on
@@ -250,8 +250,7 @@
   delegate_to: localhost
 
 - name: Check if the password has already been changed
-  local_action:
-    module: vmware_vm_shell
+  vmware_vm_shell:
     <<: *esxi_login
     vm_username: Administrator
     vm_password: '{{ vm_password_new }}'
@@ -263,12 +262,12 @@
     # Sem isto o módulo espera o padrão dele (3600s): um processo
     # travado no guest seguraria o deploy por uma hora.
     timeout: 300
+  delegate_to: localhost
   ignore_errors: true
   register: check_pass
 
 - name: Send a script to change password
-  local_action:
-    module: vmware_guest_file_operation
+  vmware_guest_file_operation:
     <<: *esxi_login
     vm_username: Administrator
     # Senha inicial do unattended: a do floppy gerado agora ou a lida da
@@ -279,6 +278,7 @@
       src: '{{ tmp_file }}'
       dest: 'c:\windows\temp\exec.txt'
       overwrite: True
+  delegate_to: localhost
   when: "check_pass is defined and not check_pass.changed"
 
 #As we are changing the password the ansible show an error of authentication failure
@@ -286,8 +286,7 @@
 # 1 - In the previous step we already validated actual password
 # 2 - In the next step we will validate the new password
 - name: Change password
-  local_action:
-    module: vmware_vm_shell
+  vmware_vm_shell:
     <<: *esxi_login
     vm_username: Administrator
     # Senha inicial do unattended: a do floppy gerado agora ou a lida da
@@ -301,12 +300,12 @@
     # Sem isto o módulo espera o padrão dele (3600s): um processo
     # travado no guest seguraria o deploy por uma hora.
     timeout: 300
+  delegate_to: localhost
   ignore_errors: true
   when: "check_pass is defined and not check_pass.changed"
 
 - name: Check password
-  local_action:
-    module: vmware_vm_shell
+  vmware_vm_shell:
     <<: *esxi_login
     vm_username: Administrator
     vm_password: '{{ vm_password_new }}'
@@ -318,6 +317,7 @@
     # Sem isto o módulo espera o padrão dele (3600s): um processo
     # travado no guest seguraria o deploy por uma hora.
     timeout: 300
+  delegate_to: localhost
   ignore_errors: false
   when: "check_pass is defined and not check_pass.changed"
 
@@ -327,8 +327,7 @@
   # (vm<13 hex>); fora dele, sanitiza e corta o nome da VM.
   vars:
     computer_name: "{{ (vm_hostname | default('') | trim) | default(vm_name | regex_replace('[^A-Za-z0-9-]', '-') | truncate(15, true, ''), true) }}"
-  local_action:
-    module: vmware_vm_shell
+  vmware_vm_shell:
     <<: *esxi_login
     vm_username: Administrator
     vm_password: '{{ vm_password_new }}'
@@ -339,6 +338,7 @@
     # Sem isto o módulo espera o padrão dele (3600s): um processo
     # travado no guest seguraria o deploy por uma hora.
     timeout: 300
+  delegate_to: localhost
 
 - name: Creating a script to enable Remote Desktop
   copy:
@@ -351,8 +351,7 @@
   delegate_to: localhost
 
 - name: Send a script to enable Remote Desktop
-  local_action:
-    module: vmware_guest_file_operation
+  vmware_guest_file_operation:
     <<: *esxi_login
     vm_username: Administrator
     vm_password: '{{ vm_password_new }}'
@@ -361,10 +360,10 @@
       src: '{{ tmp_file }}'
       dest: 'c:\windows\temp\exec.txt'
       overwrite: True
+  delegate_to: localhost
 
 - name: Enable Remote Desktop
-  local_action:
-    module: vmware_vm_shell
+  vmware_vm_shell:
     <<: *esxi_login
     vm_username: Administrator
     vm_password: '{{ vm_password_new }}'
@@ -376,6 +375,7 @@
     # Sem isto o módulo espera o padrão dele (3600s): um processo
     # travado no guest seguraria o deploy por uma hora.
     timeout: 300
+  delegate_to: localhost
   ignore_errors: true
 
 - name: Delete script local copy
@@ -385,7 +385,7 @@
   delegate_to: localhost
 
 - name: Reboot-Guest
-  vmware_guest_powerstate:
+  vmware.vmware.vm_powerstate:
     <<: *esxi_login 
     name: '{{ vm_name }}'
     state: reboot-guest
