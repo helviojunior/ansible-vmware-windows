@@ -129,7 +129,7 @@
     state: file
   delegate_to: '{{ vcenter_address }}'
 
-- name: Create a new Server 2016 VM
+- name: Create a new Windows Server VM
   vmware_guest:
     <<: *esxi_login
     folder: /

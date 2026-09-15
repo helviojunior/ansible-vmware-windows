@@ -23,7 +23,7 @@
     dest: "unattend/step2.ps1"
     content: |
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u2/windows/x64/VMware-tools-11.2.5-17337674-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
+      Invoke-WebRequest -Uri https://packages.vmware.com/tools/esx/7.0u3/windows/x64/VMware-tools-11.3.0-18090558-x86_64.exe -OutFile C:\Windows\temp\VMware-tools.exe
   delegate_to: localhost
 
 - name: Floppy | Creating a step3.ps1 file
