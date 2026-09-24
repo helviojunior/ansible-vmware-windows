@@ -52,24 +52,34 @@
   copy:
     dest: "unattend/autounattend.xml"
     content: |
-      <!--*************************************************
-      Windows Server 2016 Answer File Generator
-      Created using Windows AFG found at:
-      ;http://www.windowsafg.com
-
-      Installation Notes
-
-      Modified to work with the 180day EVAL ISO:
-      -Added <InstallFrom>...</InstallFrom> 
-      -removed the <productkey> section 
-
-      Modified to enable WinRM for Ansible
-      -Added <logoncount>1</logoncount>
-      -Added <FirstLogonCommands>...</FirstLogonCommands>
-
-      **************************************************-->
-
       <?xml version="1.0" encoding="utf-8"?>
+      <!--*************************************************
+      Windows Answer File
+      Baseado no gerador do http://www.windowsafg.com
+
+      A declaracao <?xml?> tem que ser a PRIMEIRA linha do arquivo; qualquer
+      comentario antes dela deixa o XML invalido.
+
+      Notas de instalacao
+
+      Modificado para funcionar com a ISO EVAL de 180 dias:
+      -Adicionado <InstallFrom>...</InstallFrom>
+      -Removido o <ProductKey> fixo (agora vem de windows_product_key)
+
+      Modificado para habilitar o WinRM para o Ansible
+      -Adicionado <logoncount>1</logoncount>
+      -Adicionado <FirstLogonCommands>...</FirstLogonCommands>
+
+      Modificado para Windows 10/11 de midia retail (consumer editions):
+      -<ProductKey> passou a ser obrigatorio: sem ele o setup para em
+       "Windows cannot read the <ProductKey> setting from the unattend answer file",
+       porque a ISO tem varias edicoes e a chave e o que diz qual instalar.
+      -LabConfig no pass windowsPE: ignora as exigencias de TPM/Secure Boot/RAM/
+       disco/CPU do Windows 11 numa VM legada.
+      **************************************************-->
+      {% set _pkey = (windows_product_key | default('')) | trim %}
+      {% set _iidx = (windows_image_index | default('2' if _pkey | length == 0 else '')) | string | trim %}
+      {% set _inam = (windows_image_name | default('')) | trim %}
       <unattend xmlns="urn:schemas-microsoft-com:unattend">
       <settings pass="windowsPE">
       <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -89,15 +99,30 @@
       <DiskID>0</DiskID>
       <PartitionID>2</PartitionID>
       </InstallTo>
+      {% if _iidx | length > 0 %}
           <InstallFrom>
           <MetaData wcm:action="add">
                 <Key>/IMAGE/INDEX</Key>
-                <Value>2</Value>
+                <Value>{{ _iidx }}</Value>
             </MetaData>
           </InstallFrom>
+      {% elif _inam | length > 0 %}
+          <InstallFrom>
+          <MetaData wcm:action="add">
+                <Key>/IMAGE/NAME</Key>
+                <Value>{{ _inam }}</Value>
+            </MetaData>
+          </InstallFrom>
+      {% endif %}
       </OSImage>
       </ImageInstall>
       <UserData>
+      {% if _pkey | length > 0 %}
+      <ProductKey>
+      <Key>{{ _pkey }}</Key>
+      <WillShowUI>OnError</WillShowUI>
+      </ProductKey>
+      {% endif %}
       <AcceptEula>true</AcceptEula>
       <FullName>Administrator</FullName>
       <Organization>Organization</Organization>
@@ -137,6 +162,30 @@
       <WillWipeDisk>true</WillWipeDisk>
       </Disk>
       </DiskConfiguration>
+      {% if windows_bypass_requirements | default(true) | bool %}
+      <RunSynchronous>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>1</Order>
+      <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>2</Order>
+      <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>3</Order>
+      <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>4</Order>
+      <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassStorageCheck /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>5</Order>
+      <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      </RunSynchronous>
+      {% endif %}
       </component>
       </settings>
       <settings pass="offlineServicing">
@@ -163,6 +212,17 @@
       <component name="Microsoft-Windows-SQMApi" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <CEIPEnabled>0</CEIPEnabled>
       </component>
+      {% if windows_bypass_requirements | default(true) | bool %}
+      <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+      <RunSynchronous>
+      <RunSynchronousCommand wcm:action="add">
+      <Order>1</Order>
+      <Description>Bypass OOBE network requirement</Description>
+      <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
+      </RunSynchronousCommand>
+      </RunSynchronous>
+      </component>
+      {% endif %}
       <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <ComputerName></ComputerName>
       </component>
@@ -301,6 +361,10 @@
 - name: Floppy | Read the password embedded in the standard image
   shell: |
     set -o pipefail
+    # As duas leituras abaixo varrem a imagem FAT byte a byte; sem LC_ALL=C o
+    # tr do BSD (macOS) aborta com "Illegal byte sequence" no primeiro byte
+    # invalido em UTF-8 e a senha volta vazia.
+    export LC_ALL=C
     img=resources/server2016eval.flp
     pass=""
     if command -v mcopy >/dev/null 2>&1; then

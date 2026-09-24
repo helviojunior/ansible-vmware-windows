@@ -10,8 +10,38 @@ vcenter_password: ""
 windows_iso: "Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
 windows_iso_url: "http://software-download.microsoft.com/download/pr/Windows_Server_2016_Datacenter_EVAL_en-us_14393_refresh.ISO"
 
+# Edicao a instalar
+#
+# ISO EVAL (Server 2016/2019/2022): deixe a chave vazia — o indice 2 continua
+# sendo o padrao, como antes.
+#
+# ISO retail / "consumer editions" (Windows 10 e 11): a chave e OBRIGATORIA.
+# Essas ISOs trazem varias edicoes num install.wim e o setup usa a chave para
+# saber qual instalar; sem ela ele para em "Windows cannot read the
+# <ProductKey> setting from the unattend answer file". Com a chave preenchida
+# o <InstallFrom> sai do XML e a edicao vem da propria chave.
+#
+# Chaves genericas (so escolhem a edicao, nao ativam o Windows):
+#   Windows 11/10 Pro .......... VK7JG-NPHTM-C97JM-9MPGT-3V66T
+#   Windows 11/10 Home ......... YTMG3-N6DKC-DKB77-7M9GH-8HVX7
+#   Windows 11/10 Enterprise ... XGVPP-NMH47-7TTHJ-W3FW7-8HV2C
+windows_product_key: ""
+
+# Opcionais, para forcar a edicao no lugar da chave. Deixe comentados para o
+# comportamento padrao (indice 2 sem chave, escolha pela chave com chave).
+#windows_image_index: "6"
+#windows_image_name: "Windows 11 Pro"
+
+# Grava as chaves LabConfig no pass windowsPE para o Windows 11 aceitar
+# instalar numa VM sem TPM 2.0 / Secure Boot e com menos RAM/disco que o
+# minimo. Inofensivo nas outras versoes (so cria chaves de registro).
+windows_bypass_requirements: true
+
 # VM data
 vm_name: testvm
+# Windows 10/11: windows9_64Guest (ESXi 7) ou windows11_64Guest (ESXi 8+)
+#vm_guest_id: windows9Server64Guest
+#vm_scsi_type: lsilogicsas
 vm_network: "VM Network"
 vm_password_new: "P@ssw0rd"
 vm_disk_gb: 40

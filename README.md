@@ -35,6 +35,42 @@ ip="10.10.10.10"; # Vmware server IP
 ansible-playbook -i $ip, deploy_windows.yml
 ```
 
+## Windows 10 / 11 (ISOs "consumer editions")
+
+As ISOs retail do Windows 10/11 trazem varias edicoes num mesmo `install.wim`,
+e o setup usa a chave de produto para saber qual instalar. Sem `<ProductKey>`
+no answer file a instalacao para com:
+
+```
+Windows cannot read the <ProductKey> setting from the unattend answer file.
+```
+
+Preencha `windows_product_key` no `vars.yml` (uma chave generica serve: ela so
+escolhe a edicao, nao ativa o Windows):
+
+```yaml
+windows_iso: "en-us_windows_11_consumer_editions_version_22h2_updated_july_2023_x64_dvd_f69501d4.iso"
+windows_product_key: "VK7JG-NPHTM-C97JM-9MPGT-3V66T"   # Windows 11 Pro
+windows_bypass_requirements: true                       # TPM/Secure Boot/RAM/disco
+vm_guest_id: windows9_64Guest                           # windows11_64Guest no ESXi 8+
+vm_memory_mb: 4096
+vm_disk_gb: 64
+```
+
+Com a chave preenchida o `<InstallFrom>` sai do XML e a edicao vem da chave;
+para forcar uma imagem especifica use `windows_image_index` ou
+`windows_image_name` ("Windows 11 Pro"). Para listar o que tem na ISO:
+
+```bash
+# no Linux, com wimtools instalado
+wiminfo /mnt/iso/sources/install.wim
+```
+
+`windows_bypass_requirements` grava as chaves `HKLM\SYSTEM\Setup\LabConfig`
+(`BypassTPMCheck`, `BypassSecureBootCheck`, `BypassRAMCheck`,
+`BypassStorageCheck`, `BypassCPUCheck`) ainda no WinPE — e o que faz o Windows
+11 instalar na VM com BIOS legado e sem TPM que o `tasks/deploy.yml` cria.
+
 ## Common error
 
 ```
