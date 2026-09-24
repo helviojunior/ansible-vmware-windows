@@ -208,15 +208,67 @@
   delegate_to: '{{ vcenter_address }}'
   register: powerstate
 
-- name: Wait for VMware tools to become available 
-  vmware_guest_tools_wait:
-    <<: *esxi_login
-    name: '{{ vm_name }}'
-  delegate_to: '{{ vcenter_address }}'
-  retries: 3
-  delay: 15
-  register: result           
-  until: result is succeeded 
+# O VMware Tools e instalado pelo script.cmd do floppy, que roda no primeiro
+# logon (FirstLogonCommands). Se o AutoLogon nao acontecer -- ex.: o Windows 11
+# com rede aplica atualizacoes no OOBE e reinicia antes do primeiro logon -- a
+# VM fica parada na tela de login e o Tools nunca aparece. O rescue faz o que um
+# operador faria pela console: acorda a tela, levanta a cortina de bloqueio,
+# digita a senha e da ENTER. O FirstLogonCommands roda em qualquer primeiro
+# logon, nao so no automatico.
+- name: Wait for VMware tools (console login fallback)
+  block:
+    - name: Wait for VMware tools to become available
+      vmware_guest_tools_wait:
+        <<: *esxi_login
+        name: '{{ vm_name }}'
+      delegate_to: '{{ vcenter_address }}'
+      retries: 3
+      delay: 15
+      register: result
+      until: result is succeeded
+
+  rescue:
+    - name: Console login | VMware Tools did not come up, AutoLogon probably did not happen
+      debug:
+        msg: >-
+          VMware Tools nao respondeu; entrando como Administrator pela console
+          da VM para disparar o FirstLogonCommands.
+
+    # ESC e seguro em qualquer ponto da tela de login: o 1o acorda o monitor
+    # apagado, o 2o levanta a cortina de bloqueio e, no campo de senha, ESC so
+    # limpa o que estiver digitado.
+    - name: Console login | Wake the screen and lift the lock screen
+      community.vmware.vmware_guest_sendkey:
+        <<: *esxi_login
+        name: '{{ vm_name }}'
+        keys_send: [ESC, ESC, ESC]
+        sleep_time: 4
+      delegate_to: '{{ vcenter_address }}'
+
+    - name: Console login | Type the Administrator password
+      community.vmware.vmware_guest_sendkey:
+        <<: *esxi_login
+        name: '{{ vm_name }}'
+        string_send: '{{ default_password }}'
+      delegate_to: '{{ vcenter_address }}'
+      no_log: true
+
+    - name: Console login | Submit
+      community.vmware.vmware_guest_sendkey:
+        <<: *esxi_login
+        name: '{{ vm_name }}'
+        keys_send: [ENTER]
+      delegate_to: '{{ vcenter_address }}'
+
+    - name: Wait for VMware tools after the console login
+      vmware_guest_tools_wait:
+        <<: *esxi_login
+        name: '{{ vm_name }}'
+      delegate_to: '{{ vcenter_address }}'
+      retries: 3
+      delay: 15
+      register: result
+      until: result is succeeded
 
 - name: Detach CDROM
   vmware_guest:
