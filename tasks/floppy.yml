@@ -40,6 +40,13 @@
     dest: "unattend/script.cmd"
     content: |
       @echo off
+      rem O AutoLogon ja cumpriu o papel (trouxe o FirstLogonCommands ate aqui):
+      rem desliga e apaga a senha em texto puro que o setup deixou no registro.
+      rem O LogonCount do autounattend e maior que 1 so para sobreviver aos
+      rem reboots do OOBE; sem isto sobrariam logons automaticos.
+      reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoAdminLogon /t REG_SZ /d 0 /f >nul 2>&1
+      reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultPassword /f >nul 2>&1
+      reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v AutoLogonCount /f >nul 2>&1
       a:
       cd a:\
       powershell -ExecutionPolicy ByPass -File a:\step1.ps1
@@ -80,6 +87,10 @@
        o habilita (net user), senao o AutoLogon falha, a VM para na tela de
        bloqueio e o script.cmd (WinRM/VMware Tools) nunca roda. Saiu o
        <LocalAccount> "Administrator", que colidia com a conta interna.
+      -LogonCount 5 (era 1): o Windows 11 com rede aplica atualizacoes no OOBE
+       (ZDP) e reinicia antes do primeiro logon ("Reboot is required",
+       0x00000BC2); esse reboot consumia o unico AutoLogon. O script.cmd desliga
+       o AutoLogon e apaga a DefaultPassword assim que entra.
       **************************************************-->
       {% set _pkey = (windows_product_key | default('')) | trim %}
       {% set _inam = (windows_image_name | default('')) | trim %}
@@ -247,7 +258,7 @@
         </Password>
         <Enabled>true</Enabled>
         <Username>Administrator</Username>
-          <LogonCount>1</LogonCount>
+          <LogonCount>5</LogonCount>
       </AutoLogon>
       <FirstLogonCommands>
           <SynchronousCommand wcm:action="add">
