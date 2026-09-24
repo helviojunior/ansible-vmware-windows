@@ -76,6 +76,10 @@
        porque a ISO tem varias edicoes e a chave e o que diz qual instalar.
       -LabConfig no pass windowsPE: ignora as exigencias de TPM/Secure Boot/RAM/
        disco/CPU do Windows 11 numa VM legada.
+      -O Administrator interno vem DESABILITADO nas edicoes cliente: o specialize
+       o habilita (net user), senao o AutoLogon falha, a VM para na tela de
+       bloqueio e o script.cmd (WinRM/VMware Tools) nunca roda. Saiu o
+       <LocalAccount> "Administrator", que colidia com a conta interna.
       **************************************************-->
       {% set _pkey = (windows_product_key | default('')) | trim %}
       {% set _inam = (windows_image_name | default('')) | trim %}
@@ -214,17 +218,22 @@
       <component name="Microsoft-Windows-SQMApi" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <CEIPEnabled>0</CEIPEnabled>
       </component>
-      {% if windows_bypass_requirements | default(true) | bool %}
       <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <RunSynchronous>
       <RunSynchronousCommand wcm:action="add">
       <Order>1</Order>
+      <Description>Enable the built-in Administrator (disabled on Windows 10/11 client editions)</Description>
+      <Path>cmd /c net user Administrator /active:yes</Path>
+      </RunSynchronousCommand>
+      {% if windows_bypass_requirements | default(true) | bool %}
+      <RunSynchronousCommand wcm:action="add">
+      <Order>2</Order>
       <Description>Bypass OOBE network requirement</Description>
       <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE /v BypassNRO /t REG_DWORD /d 1 /f</Path>
       </RunSynchronousCommand>
+      {% endif %}
       </RunSynchronous>
       </component>
-      {% endif %}
       <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
       <ComputerName></ComputerName>
       </component>
@@ -262,14 +271,6 @@
       <Value>{{ default_password }}</Value>
       <PlainText>true</PlainText>
       </AdministratorPassword>
-      <LocalAccounts>
-      <LocalAccount wcm:action="add">
-      <Description>Administrator</Description>
-      <DisplayName>Administrator</DisplayName>
-      <Group>Administrators</Group>
-      <Name>Administrator</Name>
-      </LocalAccount>
-      </LocalAccounts>
       </UserAccounts>
       <RegisteredOrganization>Organization</RegisteredOrganization>
       <RegisteredOwner>Administrator</RegisteredOwner>
