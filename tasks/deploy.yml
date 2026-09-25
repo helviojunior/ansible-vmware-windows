@@ -438,6 +438,39 @@
     path: '{{ tmp_file }}'
   delegate_to: localhost
 
+# O WinRM e ligado pelo script.cmd do floppy, mas a imagem de fabrica
+# (resources/server2016eval.flp) e antiga e, no Windows 10/11, a rede entra
+# como Public e o Enable-PSRemoting aborta sem criar o listener HTTPS. Garante
+# o listener aqui, pelo VMware Tools, antes do Ansible precisar da 5986. O
+# script e idempotente: onde o listener ja existe ele so confere.
+- name: Send ConfigureRemotingForAnsible.ps1
+  vmware_guest_file_operation:
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    copy:
+      src: 'resources/ConfigureRemotingForAnsible.ps1'
+      dest: 'c:\windows\temp\ConfigureRemotingForAnsible.ps1'
+      overwrite: True
+  delegate_to: localhost
+
+- name: Ensure WinRM HTTPS listener
+  vmware_vm_shell:
+    <<: *esxi_login
+    vm_username: Administrator
+    vm_password: '{{ vm_password_new }}'
+    vm_id: '{{ vm_name }}'
+    vm_shell_cwd: 'c:\windows\temp\'
+    vm_shell: 'c:\windows\system32\windowspowershell\v1.0\powershell.exe'
+    vm_shell_args: >-
+      -ExecutionPolicy Bypass -Command "Get-NetConnectionProfile -ErrorAction Ignore | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction Ignore;
+      Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction Ignore;
+      & c:\windows\temp\ConfigureRemotingForAnsible.ps1 -SkipNetworkProfileCheck"
+    wait_for_process: true
+    timeout: 300
+  delegate_to: localhost
+
 - name: Reboot-Guest
   vmware.vmware.vm_powerstate:
     <<: *esxi_login 
@@ -478,7 +511,17 @@
   set_fact:
     windows_ip: "{{ vmfacts['instance']['ipv4'] }}"
 
-- debug: msg="IP Address - {{ windows_ip }}"   
+- debug: msg="IP Address - {{ windows_ip }}"
+
+# No Windows 10/11 o servico WinRM e "Automatic (Delayed Start)": sobe uns
+# 2 minutos depois do boot, bem depois do VMware Tools. Sem esperar, o
+# Gathering Facts do play new_windows toma "connection refused" na 5986.
+- name: Wait for WinRM (5986)
+  wait_for:
+    host: '{{ windows_ip }}'
+    port: 5986
+    timeout: 600
+  delegate_to: localhost
 
 - name: "Set new windows inventory host group"
   set_fact:

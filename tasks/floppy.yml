@@ -31,8 +31,14 @@
     dest: "unattend/step3.ps1"
     content: |
       Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -ErrorAction Ignore
+      # No Windows 10/11 (SKU cliente) a rede nova entra como Public e o
+      # Enable-PSRemoting recusa rodar: o script abortava antes de criar o
+      # listener HTTPS e a 5986 ficava fechada. Server nao tem essa checagem.
+      Get-NetConnectionProfile -ErrorAction Ignore | Set-NetConnectionProfile -NetworkCategory Private -ErrorAction Ignore
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-      Invoke-Expression ((New-Object System.Net.Webclient).DownloadString('https://raw.githubusercontent.com/helviojunior/ansible-vmware-windows/main/resources/ConfigureRemotingForAnsible.ps1'))
+      $script = "$env:windir\temp\ConfigureRemotingForAnsible.ps1"
+      (New-Object System.Net.Webclient).DownloadFile('https://raw.githubusercontent.com/helviojunior/ansible-vmware-windows/main/resources/ConfigureRemotingForAnsible.ps1', $script)
+      & $script -SkipNetworkProfileCheck
   delegate_to: localhost
 
 - name: Floppy | Creating a script.cmd file
